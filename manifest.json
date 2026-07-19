@@ -1,0 +1,26 @@
+{
+  "name": "Salty CSS Exporter",
+  "api": "1.0.0",
+  "main": "dist/code.js",
+  "ui": "dist/ui.html",
+  "editorType": ["figma", "dev"],
+  "capabilities": ["codegen"],
+  "codegenLanguages": [
+    { "label": "Salty — styled()", "value": "styled" },
+    { "label": "Salty — className", "value": "className" }
+  ],
+  "codegenPreferences": [
+    {
+      "itemType": "unit",
+      "scaledUnit": "Pixels",
+      "defaultScaleFactor": 1,
+      "default": true,
+      "includedLanguages": ["styled", "className"]
+    }
+  ],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"],
+    "reasoning": "Everything runs locally inside the plugin. It only reads variables, styles, and nodes from the current document and generates Salty CSS text. No data leaves the machine."
+  }
+}
