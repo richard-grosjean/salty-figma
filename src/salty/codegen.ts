@@ -6,11 +6,26 @@
 // Colors resolve to token refs ({colors.x}) via a cached index built from the
 // document's COLOR variables; numeric values fall back to HDClamp(px).
 
-import { hdClamp, rgbaToCss, tokenRef, Raw } from './format'
+import { dottedName, hdClamp, rgbaToCss, tokenRef, Raw } from './format'
+import { familyKeyMap } from './fonts'
 import { serialize, Tree } from './serialize'
 
 // hexUppercase -> dotted token path, e.g. "#3EF58F" -> "colors.green"
 let colorIndex: Map<string, string> | null = null
+
+// fontFamily -> token key ("main"/"secondary"/…), so Dev Mode output references
+// {fontFamily.main} to match fonts.css / templates.css.ts.
+let fontFamilyIndex: Map<string, string> | null = null
+
+export async function buildFontFamilyIndex(): Promise<Map<string, string>> {
+  const styles = await figma.getLocalTextStylesAsync()
+  return familyKeyMap(styles.map((s) => s.fontName.family))
+}
+
+function resolveFontFamily(family: string): string {
+  const key = fontFamilyIndex?.get(family)
+  return key ? tokenRef(`fontFamily.${key}`) : family
+}
 
 export async function buildColorIndex(): Promise<Map<string, string>> {
   const index = new Map<string, string>()
@@ -24,7 +39,8 @@ export async function buildColorIndex(): Promise<Map<string, string>> {
       const rgba = val as RGBA
       const a = 'a' in rgba ? rgba.a : 1
       const css = rgbaToCss(rgba.r, rgba.g, rgba.b, a).toUpperCase()
-      const path = v.name.split('/').map((s) => s.trim()).filter(Boolean).join('.')
+      // All vars here are COLOR, so peel shades to match variables.css.ts nesting.
+      const path = dottedName(v.name, true)
       if (!index.has(css)) index.set(css, path)
     }
   }
@@ -109,7 +125,7 @@ function nodeToBase(node: SceneNode): Tree {
     const color = paintToColor(firstVisibleSolid(t.fills))
     if (color) base.color = color
     if (typeof t.fontSize === 'number') base.fontSize = px(t.fontSize)
-    if (t.fontName !== figma.mixed) base.fontFamily = t.fontName.family
+    if (t.fontName !== figma.mixed) base.fontFamily = resolveFontFamily(t.fontName.family)
     if (t.textAlignHorizontal && t.textAlignHorizontal !== 'LEFT') {
       base.textAlign = t.textAlignHorizontal.toLowerCase()
     }
@@ -160,6 +176,13 @@ export function registerCodegen(): void {
         colorIndex = await buildColorIndex()
       } catch {
         colorIndex = new Map()
+      }
+    }
+    if (!fontFamilyIndex) {
+      try {
+        fontFamilyIndex = await buildFontFamilyIndex()
+      } catch {
+        fontFamilyIndex = new Map()
       }
     }
     const style = language === 'className' ? 'className' : 'styled'

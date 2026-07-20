@@ -9,15 +9,6 @@
     { "label": "Salty — styled()", "value": "styled" },
     { "label": "Salty — className", "value": "className" }
   ],
-  "codegenPreferences": [
-    {
-      "itemType": "unit",
-      "scaledUnit": "Pixels",
-      "defaultScaleFactor": 1,
-      "default": true,
-      "includedLanguages": ["styled", "className"]
-    }
-  ],
   "documentAccess": "dynamic-page",
   "networkAccess": {
     "allowedDomains": ["none"],

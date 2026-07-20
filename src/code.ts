@@ -4,6 +4,7 @@ import { readDesignSystem } from './salty/read'
 import { generateVariables } from './salty/variables'
 import { generateThemes } from './salty/themes'
 import { generateTemplates } from './salty/templates'
+import { generateFonts } from './salty/fonts'
 import { registerCodegen } from './salty/codegen'
 
 // In Dev Mode the plugin runs headless as a codegen provider.
@@ -32,6 +33,7 @@ if (figma.editorType === 'dev') {
       if (msg.targets.includes('variables')) add('variables.css.ts', generateVariables(snapshot))
       if (msg.targets.includes('themes')) add('themes.css.ts', generateThemes(snapshot))
       if (msg.targets.includes('templates')) add('templates.css.ts', generateTemplates(snapshot))
+      if (msg.targets.includes('fonts')) add('fonts.css', generateFonts(snapshot))
 
       post({ type: 'exported', files, warnings })
     } catch (err) {

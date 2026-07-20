@@ -16,11 +16,48 @@ function selectedTargets(): ExportTarget[] {
   if ($<HTMLInputElement>('t-variables').checked) targets.push('variables')
   if ($<HTMLInputElement>('t-themes').checked) targets.push('themes')
   if ($<HTMLInputElement>('t-templates').checked) targets.push('templates')
+  if ($<HTMLInputElement>('t-fonts').checked) targets.push('fonts')
   return targets
 }
 
 function post(msg: unknown): void {
   parent.postMessage({ pluginMessage: msg }, '*')
+}
+
+/**
+ * Copy text to the clipboard from within the plugin iframe. The async Clipboard
+ * API is blocked here (no `clipboard-write` permission is granted to the plugin
+ * iframe), so we attempt it but fall back to a temporary textarea + the legacy
+ * execCommand('copy'), which works when run from a user-gesture handler.
+ */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // fall through to the legacy path
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.top = '0'
+    ta.style.left = '0'
+    ta.style.opacity = '0'
+    ta.style.userSelect = 'text'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    ta.setSelectionRange(0, text.length)
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
 }
 
 exportBtn.addEventListener('click', () => {
@@ -83,8 +120,8 @@ function renderResults(files: GeneratedFile[]): void {
     copy.textContent = 'Copy'
     copy.addEventListener('click', (e) => {
       e.preventDefault()
-      navigator.clipboard.writeText(f.contents).then(() => {
-        copy.textContent = 'Copied'
+      copyText(f.contents).then((ok) => {
+        copy.textContent = ok ? 'Copied' : 'Copy failed'
         setTimeout(() => (copy.textContent = 'Copy'), 1200)
       })
     })

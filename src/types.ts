@@ -77,7 +77,7 @@ export type UIToMain =
   | { type: 'export'; targets: ExportTarget[]; outputStyle: OutputStyle }
   | { type: 'close' }
 
-export type ExportTarget = 'variables' | 'themes' | 'templates'
+export type ExportTarget = 'variables' | 'themes' | 'templates' | 'fonts'
 
 export type MainToUI =
   | { type: 'exported'; files: GeneratedFile[]; warnings: string[] }

@@ -10,23 +10,7 @@ import type {
   ReadVariable,
   ResolvedType,
 } from '../types'
-import { camelCase, num, rgbaToCss } from './format'
-
-// Split a Figma variable name on its "/" group separators and camelCase each
-// segment, so "Font Size/Body Large" -> ["fontSize", "bodyLarge"]. Doing this
-// here keeps emitted object keys and alias/token refs (which resolve through the
-// same path) consistently camelCased.
-function splitName(name: string): string[] {
-  return name
-    .split('/')
-    .map((s) => camelCase(s))
-    .filter(Boolean)
-}
-
-/** dotted path for a variable name, e.g. "colors/light1/100" -> "colors.light1.100". */
-function dottedName(name: string): string {
-  return splitName(name).join('.')
-}
+import { dottedName, num, rgbaToCss, splitName } from './format'
 
 async function readValue(
   value: VariableValue,
@@ -43,7 +27,10 @@ async function readValue(
       target = await figma.variables.getVariableByIdAsync(value.id)
       cache.set(value.id, target)
     }
-    return { kind: 'alias', path: target ? dottedName(target.name) : value.id }
+    return {
+      kind: 'alias',
+      path: target ? dottedName(target.name, target.resolvedType === 'COLOR') : value.id,
+    }
   }
 
   // RGB / RGBA color.
@@ -72,7 +59,7 @@ async function readCollection(collection: VariableCollection): Promise<ReadColle
     }
     variables.push({
       name: v.name,
-      path: splitName(v.name),
+      path: splitName(v.name, v.resolvedType === 'COLOR'),
       resolvedType: v.resolvedType as ResolvedType,
       valuesByMode,
     })

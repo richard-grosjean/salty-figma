@@ -76,3 +76,68 @@ export function camelCase(segment: string): string {
 export function keyFromSegment(seg: string): string {
   return camelCase(seg)
 }
+
+/**
+ * Pull a numeric "shade" out of a camelCased color leaf segment. Matches an
+ * optional letters prefix, 2–3 digits, and an optional trailing "Default" word:
+ *   "offBlack900"        -> { prefix: "offBlack", num: "900" }
+ *   "offBlack950Default" -> { prefix: "offBlack", num: "950" }   (Default -> base shade)
+ *   "900"                -> { prefix: "",         num: "900" }
+ * Single-digit names ("light1", "heading1") and shade-less names ("white") don't
+ * match and return null so they're left untouched.
+ */
+export function extractShade(seg: string): { prefix: string; num: string } | null {
+  const m = /^([A-Za-z]*?)(\d{2,3})(?:default)?$/i.exec(seg)
+  return m ? { prefix: m[1], num: m[2] } : null
+}
+
+/** Group shade suffixes and collapse a leaf that restates its parent folder. */
+function shadePath(segs: string[]): string[] {
+  const last = segs.length - 1
+  const shade = extractShade(segs[last])
+  if (!shade) return segs
+
+  const head = segs.slice(0, last)
+  const parent = last > 0 ? segs[last - 1] : undefined
+  // Leaf just restates its parent folder ("offBlack/offBlack900") -> drop the
+  // redundant prefix so the shade sits directly under the folder.
+  if (shade.prefix && parent && shade.prefix.toLowerCase() === parent.toLowerCase()) {
+    return [...head, shade.num]
+  }
+  // Otherwise nest the shade under its own prefix key ("colors/offBlack900").
+  if (shade.prefix) return [...head, shade.prefix, shade.num]
+  return [...head, shade.num]
+}
+
+/** Ensure a color path lives under a top-level `colors` namespace (no double-prefix). */
+function namespaceColors(path: string[]): string[] {
+  const head = path[0]?.toLowerCase()
+  return head === 'colors' || head === 'color' ? path : ['colors', ...path]
+}
+
+/**
+ * Split a Figma variable name on its "/" group separators and camelCase each
+ * segment: "Font Size/Body Large" -> ["fontSize", "bodyLarge"]. When `isColor`
+ * is set, colors are grouped under a top-level `colors` namespace and the leaf's
+ * trailing shade is folded into a shared key:
+ *   "offBlack900"                 -> ["colors", "offBlack", "900"]
+ *   "offBlack/offBlack900"        -> ["colors", "offBlack", "900"]  (leaf restates its folder)
+ *   "offBlack/offBlack950Default" -> ["colors", "offBlack", "950"]
+ *   "colors/offBlack900"          -> ["colors", "offBlack", "900"]  (already namespaced)
+ *   "white"                       -> ["colors", "white"]
+ * Centralising this keeps emitted object keys and alias/token refs (which
+ * resolve through the same path) consistently structured across every output.
+ */
+export function splitName(name: string, isColor = false): string[] {
+  const segs = name
+    .split('/')
+    .map((s) => camelCase(s))
+    .filter(Boolean)
+  if (!isColor || segs.length === 0) return segs
+  return namespaceColors(shadePath(segs))
+}
+
+/** dotted path for a variable name, e.g. "colors/offBlack900" -> "colors.offBlack.900" (when isColor). */
+export function dottedName(name: string, isColor = false): string {
+  return splitName(name, isColor).join('.')
+}

@@ -8,7 +8,8 @@
 
 import type { DesignSystemSnapshot, ReadCollection, ReadValue, ReadVariable } from '../types'
 import { classifyModes, findThemeCollection, isNonClampGroup } from './config'
-import { hdClamp, mobileClamp, Raw, tokenRef } from './format'
+import { collectFontFamilies, familiesOf } from './fonts'
+import { hdClamp, isRaw, mobileClamp, Raw, tokenRef } from './format'
 import { serialize, setPath, Tree } from './serialize'
 
 export interface GenResult {
@@ -88,6 +89,19 @@ export function generateVariables(snapshot: DesignSystemSnapshot): GenResult {
         }
       }
     }
+  }
+
+  // Font families used by text styles become fontFamily.main / .secondary / …
+  // tokens so templates.css.ts can reference {fontFamily.main}. Existing
+  // (Figma-sourced) fontFamily keys are preserved.
+  const fontFamilies = collectFontFamilies(familiesOf(snapshot))
+  if (fontFamilies.length) {
+    const existing =
+      top.fontFamily && typeof top.fontFamily === 'object' && !isRaw(top.fontFamily)
+        ? (top.fontFamily as Tree)
+        : {}
+    for (const f of fontFamilies) if (!(f.key in existing)) existing[f.key] = f.cssValue
+    top.fontFamily = existing
   }
 
   const root: Tree = { ...top }
