@@ -10,7 +10,7 @@ import type {
   ReadVariable,
   ResolvedType,
 } from '../types'
-import { dottedName, num, rgbaToCss, splitName } from './format'
+import { dottedName, expandSizeSegment, num, renameSegment, rgbaToCss, splitName } from './format'
 
 async function readValue(
   value: VariableValue,
@@ -124,7 +124,9 @@ function weightFromStyle(style: string): number | null {
 async function readTextStyle(style: TextStyle): Promise<ReadTextStyle> {
   return {
     name: style.name,
-    path: splitName(style.name),
+    // Canonicalise segments (headline -> heading, r -> regular) and expand
+    // t-shirt size abbreviations, e.g. "xxxl" -> "xxxLarge".
+    path: splitName(style.name).map((s) => expandSizeSegment(renameSegment(s))),
     fontFamily: style.fontName.family,
     fontStyle: style.fontName.style,
     fontSize: num(style.fontSize),

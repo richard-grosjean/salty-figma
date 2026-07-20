@@ -4,7 +4,7 @@
 
 import type { DesignSystemSnapshot, ReadValue } from '../types'
 import { findThemeCollection } from './config'
-import { camelCase, isRaw, tokenRef } from './format'
+import { camelCase, isRaw, splitName, tokenRef } from './format'
 import { serialize, setPath, Tree } from './serialize'
 import type { GenResult } from './variables'
 
@@ -126,7 +126,10 @@ export function generateThemes(snapshot: DesignSystemSnapshot): GenResult {
 
     const values: Tree = {}
     for (const v of collection.variables) {
-      setPath(values, v.path, themeValue(v.valuesByMode[mode.modeId]))
+      // Theme values use their plain semantic key (backgroundColor, …) — NOT the
+      // `colors` namespace that palette variables get. Their *values* still
+      // reference {colors.…} via the resolved alias path.
+      setPath(values, splitName(v.name), themeValue(v.valuesByMode[mode.modeId]))
     }
     modeValues.push(values)
     themes[key] = { title: mode.name, values }

@@ -77,6 +77,41 @@ export function keyFromSegment(seg: string): string {
   return camelCase(seg)
 }
 
+const SEGMENT_ALIASES: Record<string, string> = {
+  headline: 'heading',
+  r: 'regular',
+}
+
+/** Canonicalise known synonym segments, e.g. "headline" -> "heading". Case-insensitive. */
+export function renameSegment(seg: string): string {
+  return SEGMENT_ALIASES[seg.toLowerCase()] ?? seg
+}
+
+const SIZE_WORD: Record<string, string> = {
+  s: 'small',
+  sm: 'small',
+  m: 'medium',
+  md: 'medium',
+  l: 'large',
+  lg: 'large',
+}
+
+/**
+ * Expand a t-shirt size abbreviation into a readable key. An optional run of
+ * `x`s is kept as an "extra" prefix and the base letter is spelled out:
+ *   "xxxl" / "XXXL" -> "xxxLarge"    "l" -> "large"     "xl" -> "xLarge"
+ *   "xs" -> "xSmall"                 "sm" -> "small"    "md" -> "medium"
+ * Segments that aren't a size abbreviation (already-spelled "large", "heading",
+ * "medium", …) are returned unchanged.
+ */
+export function expandSizeSegment(seg: string): string {
+  const m = /^(x*)(sm|md|lg|s|m|l)$/i.exec(seg)
+  if (!m) return seg
+  const xs = m[1].toLowerCase()
+  const word = SIZE_WORD[m[2].toLowerCase()]
+  return xs ? xs + word[0].toUpperCase() + word.slice(1) : word
+}
+
 /**
  * Pull a numeric "shade" out of a camelCased color leaf segment. Matches an
  * optional letters prefix, 2–3 digits, and an optional trailing "Default" word:
