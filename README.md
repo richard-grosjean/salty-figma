@@ -72,6 +72,11 @@ Desktop/mobile variants of the same style are merged into one entry, with the si
 `heading.xxxLarge` with `fontSize: HDClamp(80, 40)`. Line-height / letter-spacing are relative
 (`%` / `em`) and viewport-independent, so the desktop values carry over.
 
+A redundant single-weight level is flattened: if a category only ever uses one weight
+(`monoType/<size>/medium`), the weight key is dropped so the style sits directly under the size
+(`monoType.large`). A category with multiple weights (`body/<size>/regular` + `.../medium`) keeps
+the level.
+
 ## Develop
 
 ```bash

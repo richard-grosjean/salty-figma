@@ -10,9 +10,46 @@
 
 import type { DesignSystemSnapshot, ReadTextStyle } from '../types'
 import { familiesOf, familyKeyMap } from './fonts'
-import { hdClamp, tokenRef } from './format'
+import { hdClamp, isRaw, tokenRef } from './format'
 import { serialize, setPath, Tree } from './serialize'
 import type { GenResult } from './variables'
+
+function isPlainObject(v: unknown): v is Tree {
+  return typeof v === 'object' && v !== null && !isRaw(v) && !Array.isArray(v)
+}
+
+/** A leaf style object (has fontSize) vs. a grouping node (nested style names). */
+function isLeafStyle(v: unknown): boolean {
+  return isPlainObject(v) && 'fontSize' in v
+}
+
+/**
+ * Drop a redundant single-weight level. When every sibling under a node is a
+ * wrapper holding the same single style child — e.g. monoType/<size>/medium,
+ * where `medium` is the only weight used — collapse those wrappers so the leaf
+ * sits directly under the size. A group with multiple weights (body/<size>/regular
+ * + .../medium) is left alone, and the varying size dimension is never collapsed
+ * because its sibling keys differ.
+ */
+function collapseSingleWeight(node: Tree): void {
+  for (const k of Object.keys(node)) {
+    const child = node[k]
+    if (isPlainObject(child) && !isLeafStyle(child)) collapseSingleWeight(child)
+  }
+
+  const keys = Object.keys(node)
+  if (keys.length === 0) return
+  let shared: string | null = null
+  for (const k of keys) {
+    const child = node[k]
+    if (!isPlainObject(child) || isLeafStyle(child)) return // not a wrapper -> bail
+    const childKeys = Object.keys(child)
+    if (childKeys.length !== 1 || !isLeafStyle(child[childKeys[0]])) return
+    if (shared === null) shared = childKeys[0]
+    else if (shared !== childKeys[0]) return // siblings vary -> a real dimension
+  }
+  for (const k of keys) node[k] = (node[k] as Tree)[shared!]
+}
 
 type Viewport = 'desktop' | 'mobile'
 
@@ -104,6 +141,12 @@ export function generateTemplates(snapshot: DesignSystemSnapshot): GenResult {
     const mobile = g.mobile && g.mobile !== base ? g.mobile : undefined
     const obj = styleObject(base, familyKeys, mobile)
     setPath(textStyles, g.key.length ? g.key : [base.name], obj)
+  }
+
+  // Flatten a redundant single-weight level within each text-style category.
+  for (const category of Object.keys(textStyles)) {
+    const sub = textStyles[category]
+    if (isPlainObject(sub) && !isLeafStyle(sub)) collapseSingleWeight(sub)
   }
 
   const lines: string[] = [
