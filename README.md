@@ -72,10 +72,20 @@ Desktop/mobile variants of the same style are merged into one entry, with the si
 `heading.xxxLarge` with `fontSize: HDClamp(80, 40)`. Line-height / letter-spacing are relative
 (`%` / `em`) and viewport-independent, so the desktop values carry over.
 
-A redundant single-weight level is flattened: if a category only ever uses one weight
-(`monoType/<size>/medium`), the weight key is dropped so the style sits directly under the size
-(`monoType.large`). A category with multiple weights (`body/<size>/regular` + `.../medium`) keeps
-the level.
+**The weight level is never emitted** — styles nest only down to the size (`body.large`, not
+`body.large.400`). Each size keeps a single style whose `fontWeight` is set from its weight
+children: the sole weight when only one is used (`monoType/<size>/medium` → `monoType.large` with
+`fontWeight: 500`); regular (`400`) when several are used (`body/<size>/regular` + `.../medium` →
+one `body.large` with `fontWeight: 400`); or the style's own defined weight when the name carries
+no weight level.
+
+Weights are only recognised at the **third level or deeper** — the first level is the category
+(`heading`) and the second is the size (`large`), so neither is ever folded into a `fontWeight`.
+Below that, a level counts as weights only when **every** child is a weight word
+(`regular`/`medium`/`bold`/…); a level that mixes weight words with other names is a size scale.
+So a heading sized `small`/`regular`/`medium`/`large` keeps `regular` and `medium` as sizes
+(`heading.regular`, `heading.medium`), and a size-less `Body/Regular` + `Body/Medium` stays as two
+second-level entries rather than collapsing into one.
 
 ## Develop
 
@@ -108,3 +118,21 @@ src/
     format.ts        rgba/clamp/token-ref formatting + name conversions
     serialize.ts     value tree -> pretty TS source
 ```
+
+## About Salty CSS
+
+[Salty CSS](https://salty-css.dev) is a build-time CSS-in-JS library for React, Next.js and
+Server Components — you author styles in `.css.ts` files with `styled()`, `defineVariables()` and
+`defineTemplates()`, and it compiles them to static CSS. This plugin turns a Figma design system
+into exactly those source files, so your tokens live in one place and stay in sync with design.
+
+- Website: <https://salty-css.dev>
+- Source: <https://github.com/margarita-form/salty-css>
+
+## License
+
+MIT © 2026 Richard Grosjean — see [`LICENSE`](LICENSE).
+
+This is an independent plugin and is not affiliated with or endorsed by Salty CSS. Salty CSS is a
+separate project, also MIT-licensed (© Teemu Lahjalahti & Salty CSS contributors). No Salty CSS
+source is bundled here — the plugin only generates files that consume its public API.

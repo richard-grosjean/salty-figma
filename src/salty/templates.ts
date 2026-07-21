@@ -10,7 +10,7 @@
 
 import type { DesignSystemSnapshot, ReadTextStyle } from '../types'
 import { familiesOf, familyKeyMap } from './fonts'
-import { hdClamp, isRaw, tokenRef } from './format'
+import { hdClamp, isRaw, tokenRef, weightFromSegment } from './format'
 import { serialize, setPath, Tree } from './serialize'
 import type { GenResult } from './variables'
 
@@ -24,31 +24,51 @@ function isLeafStyle(v: unknown): boolean {
 }
 
 /**
- * Drop a redundant single-weight level. When every sibling under a node is a
- * wrapper holding the same single style child — e.g. monoType/<size>/medium,
- * where `medium` is the only weight used — collapse those wrappers so the leaf
- * sits directly under the size. A group with multiple weights (body/<size>/regular
- * + .../medium) is left alone, and the varying size dimension is never collapsed
- * because its sibling keys differ.
+ * Collapse the weight level so styles only ever nest down to the size level.
+ * Figma text styles are named category/size/weight (e.g. `Body/Large/Regular`),
+ * which would otherwise emit a third `body.large.400` key. Instead each size
+ * keeps a single style whose fontWeight is: the sole child weight when only one
+ * is used; regular (400) when several are used; or the style's own defined
+ * weight when the name carries no weight level at all.
+ *
+ * Weights are only ever recognised at the third level or deeper: the first level
+ * is the category (`heading`) and the second is the size (`large`), so neither is
+ * folded into a fontWeight. Below that, a "weight group" is a node whose children
+ * are all leaves keyed by a weight word (`regular`/`medium`/`bold`/…) — those
+ * collapse to one leaf. A level that mixes weight words with other names is a size
+ * scale — e.g. a heading sized `small`/`regular`/`medium`/`large` — so it's
+ * descended into but never collapsed, keeping `regular`/`medium` as sizes.
  */
-function collapseSingleWeight(node: Tree): void {
+function isWeightKey(k: string): boolean {
+  return weightFromSegment(k) !== null
+}
+
+// `level` is the hierarchy level of node's children (categories = 1). A weight
+// group's members sit one level below, so collapsing at level >= 2 keeps weights
+// out of the first (category) and second (size) levels.
+function collapseWeights(node: Tree, level: number): void {
   for (const k of Object.keys(node)) {
     const child = node[k]
-    if (isPlainObject(child) && !isLeafStyle(child)) collapseSingleWeight(child)
+    if (!isPlainObject(child) || isLeafStyle(child)) continue
+    const keys = Object.keys(child)
+    const allWeights =
+      keys.length > 0 && keys.every((ck) => isWeightKey(ck) && isLeafStyle(child[ck]))
+    if (level >= 2 && allWeights) {
+      node[k] = pickWeight(child) // weight group -> single leaf
+    } else {
+      collapseWeights(child, level + 1) // size (or higher) level -> descend
+    }
   }
+}
 
-  const keys = Object.keys(node)
-  if (keys.length === 0) return
-  let shared: string | null = null
-  for (const k of keys) {
-    const child = node[k]
-    if (!isPlainObject(child) || isLeafStyle(child)) return // not a wrapper -> bail
-    const childKeys = Object.keys(child)
-    if (childKeys.length !== 1 || !isLeafStyle(child[childKeys[0]])) return
-    if (shared === null) shared = childKeys[0]
-    else if (shared !== childKeys[0]) return // siblings vary -> a real dimension
-  }
-  for (const k of keys) node[k] = (node[k] as Tree)[shared!]
+/** Pick the single leaf for a collapsed weight group (see collapseWeights). */
+function pickWeight(group: Tree): Tree {
+  const leaves = Object.keys(group).map((k) => group[k] as Tree)
+  if (leaves.length === 1) return leaves[0]
+  // Several weights -> default to regular (400), keeping a regular variant's
+  // metrics when present (size metrics are identical across weights anyway).
+  const base = leaves.find((l) => l.fontWeight === 400) ?? leaves[0]
+  return { ...base, fontWeight: 400 }
 }
 
 type Viewport = 'desktop' | 'mobile'
@@ -143,11 +163,9 @@ export function generateTemplates(snapshot: DesignSystemSnapshot): GenResult {
     setPath(textStyles, g.key.length ? g.key : [base.name], obj)
   }
 
-  // Flatten a redundant single-weight level within each text-style category.
-  for (const category of Object.keys(textStyles)) {
-    const sub = textStyles[category]
-    if (isPlainObject(sub) && !isLeafStyle(sub)) collapseSingleWeight(sub)
-  }
+  // Collapse the weight level so styles nest only down to the size level.
+  // Children of the root are categories (level 1).
+  collapseWeights(textStyles, 1)
 
   const lines: string[] = [
     `import { defineTemplates } from '@salty-css/core/factories';`,

@@ -10,7 +10,14 @@ import type {
   ReadVariable,
   ResolvedType,
 } from '../types'
-import { dottedName, expandSizeSegment, num, renameSegment, rgbaToCss, splitName } from './format'
+import {
+  dottedName,
+  expandSizeSegment,
+  num,
+  renameSegment,
+  rgbaToCss,
+  splitName,
+} from './format'
 
 async function readValue(
   value: VariableValue,
@@ -121,16 +128,26 @@ function weightFromStyle(style: string): number | null {
   return null
 }
 
+/**
+ * Canonicalise segments (headline -> heading, r -> regular) and expand t-shirt
+ * size abbreviations ("xxxl" -> "xxxLarge"). Weight segments are left as words:
+ * the templates generator decides which level is a weight (from its siblings)
+ * and folds it into the style's `fontWeight`, so a size named `Headline/Medium`
+ * stays "medium" instead of being mistaken for a 500 weight.
+ */
+function textStylePath(name: string): string[] {
+  return splitName(name).map((s) => expandSizeSegment(renameSegment(s)))
+}
+
 async function readTextStyle(style: TextStyle): Promise<ReadTextStyle> {
+  const fontWeight = weightFromStyle(style.fontName.style)
   return {
     name: style.name,
-    // Canonicalise segments (headline -> heading, r -> regular) and expand
-    // t-shirt size abbreviations, e.g. "xxxl" -> "xxxLarge".
-    path: splitName(style.name).map((s) => expandSizeSegment(renameSegment(s))),
+    path: textStylePath(style.name),
     fontFamily: style.fontName.family,
     fontStyle: style.fontName.style,
     fontSize: num(style.fontSize),
-    fontWeight: weightFromStyle(style.fontName.style),
+    fontWeight,
     lineHeight: lineHeightToCss(style.lineHeight, style.fontSize),
     letterSpacing: letterSpacingToCss(style.letterSpacing, style.fontSize),
     textTransform:

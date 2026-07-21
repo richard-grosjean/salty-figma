@@ -87,6 +87,33 @@ export function renameSegment(seg: string): string {
   return SEGMENT_ALIASES[seg.toLowerCase()] ?? seg
 }
 
+const WEIGHT_WORDS: Record<string, number> = {
+  thin: 100,
+  extralight: 200,
+  ultralight: 200,
+  light: 300,
+  regular: 400,
+  normal: 400,
+  medium: 500,
+  semibold: 600,
+  demibold: 600,
+  bold: 700,
+  extrabold: 800,
+  ultrabold: 800,
+  black: 900,
+  heavy: 900,
+}
+
+/**
+ * Numeric font weight for a canonical weight-word segment (light -> 300 …
+ * bold -> 700), else null. Segments are already camelCased by `splitName`, so
+ * "semi bold" arrives as "semiBold" and matches "semibold". Note `medium` also
+ * names a t-shirt size — callers that group by size must disambiguate.
+ */
+export function weightFromSegment(seg: string): number | null {
+  return WEIGHT_WORDS[seg.toLowerCase()] ?? null
+}
+
 const SIZE_WORD: Record<string, string> = {
   s: 'small',
   sm: 'small',
