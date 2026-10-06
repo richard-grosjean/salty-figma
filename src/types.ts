@@ -76,6 +76,7 @@ export interface DesignSystemSnapshot {
 export type UIToMain =
   | { type: 'export'; targets: ExportTarget[]; outputStyle: OutputStyle }
   | { type: 'close' }
+  | { type: 'resize'; width: number; height: number }
 
 export type ExportTarget = 'variables' | 'themes' | 'templates' | 'fonts'
 

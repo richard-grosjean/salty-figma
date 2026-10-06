@@ -74,6 +74,15 @@ exportBtn.addEventListener('click', () => {
 
 closeBtn.addEventListener('click', () => post({ type: 'close' }))
 
+// Drag the bottom-right grip to resize the plugin window.
+const grip = $<HTMLDivElement>('resize')
+grip.addEventListener('pointerdown', (e) => {
+  grip.setPointerCapture(e.pointerId)
+  const move = (ev: PointerEvent) => post({ type: 'resize', width: ev.clientX + 8, height: ev.clientY + 8 })
+  grip.addEventListener('pointermove', move)
+  grip.addEventListener('pointerup', () => grip.removeEventListener('pointermove', move), { once: true })
+})
+
 downloadBtn.addEventListener('click', () => {
   if (lastFiles.length === 0) return
   const entries: Record<string, Uint8Array> = {}

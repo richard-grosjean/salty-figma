@@ -62,10 +62,15 @@
       pre {
         margin: 0; padding: 10px; background: var(--bg); border-top: 1px solid var(--border);
         overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 11px; line-height: 1.5; white-space: pre; user-select: text; max-height: 260px;
+        font-size: 11px; line-height: 1.5; white-space: pre; user-select: text; max-height: 60vh;
       }
       footer { padding: 8px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
       .grow { flex: 1; }
+      .resize {
+        position: fixed; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize;
+        background: linear-gradient(135deg, transparent 50%, var(--text-secondary) 50%, var(--text-secondary) 60%, transparent 60%, transparent 75%, var(--text-secondary) 75%, var(--text-secondary) 85%, transparent 85%);
+        opacity: 0.6;
+      }
       .hint { color: var(--text-secondary); font-size: 11px; margin-top: 8px; line-height: 1.5; }
     </style>
   </head>
@@ -95,5 +100,6 @@
       <button class="grow" id="download" disabled>Download .zip</button>
       <button id="close">Close</button>
     </footer>
+    <div class="resize" id="resize"></div>
   </body>
 </html>

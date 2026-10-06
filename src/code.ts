@@ -18,6 +18,10 @@ if (figma.editorType === 'dev') {
       figma.closePlugin()
       return
     }
+    if (msg.type === 'resize') {
+      figma.ui.resize(Math.max(320, Math.round(msg.width)), Math.max(360, Math.round(msg.height)))
+      return
+    }
     if (msg.type !== 'export') return
 
     try {

@@ -199,6 +199,21 @@ export function splitName(name: string, isColor = false): string[] {
   return namespaceColors(shadePath(segs))
 }
 
+/** Key a value moves to when its path is also a group ("waveBlack" + "waveBlack/25"). */
+export const LEAF_KEY = '100'
+
+/**
+ * Given every path that lands in one tree, return a mapper that moves a value
+ * whose path is also a group's into that group under LEAF_KEY:
+ *   colors.waveBlack (+ colors.waveBlack.25) -> colors.waveBlack.100
+ * Without it the nested group overwrites the value.
+ */
+export function leafPaths(paths: string[][]): (path: string[]) => string[] {
+  const groups = new Set<string>()
+  for (const p of paths) for (let i = 1; i < p.length; i++) groups.add(p.slice(0, i).join('.'))
+  return (path) => (groups.has(path.join('.')) ? [...path, LEAF_KEY] : path)
+}
+
 /** dotted path for a variable name, e.g. "colors/offBlack900" -> "colors.offBlack.900" (when isColor). */
 export function dottedName(name: string, isColor = false): string {
   return splitName(name, isColor).join('.')
