@@ -27,7 +27,7 @@ Modelled on the conventions in `gigaton-website/apps/website/src/styles/`.
   collection has a mobile mode) `responsive['@largeMobileDown']` as `MobileClamp(mobile)`.
 - **`fontWeights` / `zIndex`** numbers → emitted raw (never clamped).
 - **The theme collection** (a collection named theme/semantic, or one with Light/Dark modes) → each
-  mode becomes a theme with a `title` + flat `values`; alias values become `{colors.x}` refs. The
+  mode becomes a theme with a `title` + flat `values` (color keys get a `Color` suffix: `background` → `backgroundColor`); alias values become `{colors.x}` refs. The
   generated `Theme` interface types each value `string`, marking a key optional when only some modes
   set it (`themes` is emitted `as const satisfies Record<string, Theme>`).
 - Anything that doesn't resolve to a token falls back to `HDClamp(px)` (desktop) / `MobileClamp(px)`.

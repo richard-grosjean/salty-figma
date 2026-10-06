@@ -2,7 +2,7 @@
 // Each mode (Light / Dark / Grey / …) becomes an entry in `themes`, and the
 // whole thing is wired into Salty via defineVariables({ conditional: { theme } }).
 
-import type { DesignSystemSnapshot, ReadValue } from '../types'
+import type { DesignSystemSnapshot, ReadValue, ReadVariable } from '../types'
 import { findThemeCollection } from './config'
 import { camelCase, isRaw, leafPaths, splitName, tokenRef } from './format'
 import { serialize, setPath, Tree } from './serialize'
@@ -10,6 +10,14 @@ import type { GenResult } from './variables'
 
 function themeKey(modeName: string): string {
   return camelCase(modeName)
+}
+
+/** Theme key path for a variable; color leaves get a `Color` suffix (background -> backgroundColor). */
+function themeName(v: ReadVariable): string[] {
+  const path = splitName(v.name)
+  const last = path[path.length - 1]
+  if (v.resolvedType !== 'COLOR' || !last || /color$/i.test(last) || /^\d/.test(last)) return path
+  return [...path.slice(0, -1), `${last}Color`]
 }
 
 function themeValue(val: ReadValue | undefined): string | undefined {
@@ -119,7 +127,7 @@ export function generateThemes(snapshot: DesignSystemSnapshot): GenResult {
   const seen = new Set<string>()
   const modeValues: Tree[] = []
 
-  const themePath = leafPaths(collection.variables.map((v) => splitName(v.name)))
+  const themePath = leafPaths(collection.variables.map(themeName))
 
   for (const mode of collection.modes) {
     let key = themeKey(mode.name)
@@ -131,7 +139,7 @@ export function generateThemes(snapshot: DesignSystemSnapshot): GenResult {
       // Theme values use their plain semantic key (backgroundColor, …) — NOT the
       // `colors` namespace that palette variables get. Their *values* still
       // reference {colors.…} via the resolved alias path.
-      setPath(values, themePath(splitName(v.name)), themeValue(v.valuesByMode[mode.modeId]))
+      setPath(values, themePath(themeName(v)), themeValue(v.valuesByMode[mode.modeId]))
     }
     modeValues.push(values)
     themes[key] = { title: mode.name, values }
