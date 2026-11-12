@@ -34,7 +34,11 @@ if (figma.editorType === 'dev') {
         if (gen.contents.trim()) files.push({ name, contents: gen.contents })
       }
 
-      if (msg.targets.includes('variables')) add('variables.css.ts', generateVariables(snapshot))
+      if (msg.targets.includes('variables')) {
+        const vars = generateVariables(snapshot)
+        add('variables.css.ts', vars)
+        if (vars.colors) files.push({ name: 'colors.ts', contents: vars.colors })
+      }
       if (msg.targets.includes('themes')) add('themes.ts', generateThemes(snapshot))
       if (msg.targets.includes('templates')) add('text-styles.ts', generateTemplates(snapshot))
       if (msg.targets.includes('fonts')) add('fonts.css.ts', generateFonts(snapshot))

@@ -15,6 +15,7 @@ Modelled on the conventions in `gigaton-website/apps/website/src/styles/`.
 | Target | Output file | Salty API |
 |--------|-------------|-----------|
 | Variables | `variables.css.ts` | `defineVariables({ colors, fontFamily, … , responsive: { base, '@largeMobileDown' } })` |
+| Colors | `colors.ts` | `export const colors = { … }` — plain module, imported by `variables.css.ts` (written with Variables) |
 | Themes | `themes.ts` | `defineVariables({ conditional: { theme } })` + a generated `Theme` interface |
 | Text styles | `text-styles.ts` | `export const textStyles = { … } as const` (pass to `defineTemplates` yourself) |
 | Fonts | `fonts.css.ts` | `defineFont({ name, fallback, display, variable, variants })` per family |
@@ -28,7 +29,8 @@ Modelled on the conventions in `gigaton-website/apps/website/src/styles/`.
   collection isn't double-prefixed. Size names inside `fontSizes` are expanded like text styles.
 - **Strings / booleans** → static values at that path.
 - **Numeric variables** in scaling groups → `responsive.base` as `HDClamp(desktop)`, and (when the
-  collection has a mobile mode) `responsive['@largeMobileDown']` as `MobileClamp(mobile)`.
+  collection has a mobile mode) `responsive['@largeMobileDown']` as `MobileClamp(mobile)`. Ones whose
+  name is just a number (`spacing/16`, `spacing/24px`) are skipped — use `HDClamp(16)` in code.
 - **`fontWeights` / `zIndex`** numbers → emitted raw (never clamped).
 - **The theme collection** (a collection named theme/semantic, or one with Light/Dark modes) → each
   mode becomes a theme with a `title` + flat `values` (color keys get a `Color` suffix: `background` → `backgroundColor`); alias values become `{colors.x}` refs. The
@@ -56,11 +58,13 @@ To keep the emitted tokens idiomatic, some Figma names are rewritten. The conver
 A trailing 2–3 digit shade (50–950) is split off; single digits (`light1`) and pure numbers are left
 alone. Already-`colors`-prefixed names aren't double-namespaced.
 
-**Font families** — families defined as `fontFamily.*` variables in Figma keep that key. Any other
-family used by text styles becomes `fontFamily.main`, `fontFamily.secondary`, … (ordered by usage
-frequency). `text-styles.ts` and the Dev Mode snippet reference these tokens, `variables.css.ts`
-defines them, and `fonts.css.ts` emits one `defineFont()` per family, with a variant per
-`(weight, italic)` used (`src: '/fonts/<Family>-<Style>.woff2'`) and `variable: 'font-family-<key>'`.
+**Font families** — two layers. Layer 1 is one key per family used by text styles —
+`fontFamily.main`, `fontFamily.secondary`, … (ordered by usage frequency) — defined by
+`fonts.css.ts`: one `defineFont()` per family with `variable: 'font-family-main'` etc., and a variant
+per `(weight, italic)` used (`src: '/fonts/<Family>-<Style>.woff2'`). Layer 2 is the Figma
+`fontFamily.*` variables, written to `variables.css.ts` as refs to the layer-1 key of the family they
+hold (`heading: '{fontFamily.main}'`). `text-styles.ts` and the Dev Mode snippet reference the
+layer-2 key when one exists, otherwise layer 1.
 
 **Text styles** — segment names are canonicalised:
 
@@ -130,10 +134,10 @@ src/
   salty/
     read.ts          reads Figma variables + text styles -> plain snapshot
     config.ts        mapping heuristics (collection/mode classification)
-    variables.ts     -> variables.css.ts (colors, fontFamily tokens, responsive)
+    variables.ts     -> variables.css.ts + colors.ts (colors, fontFamily layer 2, responsive)
     themes.ts        -> themes.ts output (+ Theme interface)
     templates.ts     -> text-styles.ts (category base + per-size overrides)
-    fonts.ts         -> fonts.css.ts (defineFont) + fontFamily token derivation
+    fonts.ts         -> fonts.css.ts (defineFont, font family layer 1) + key derivation
     codegen.ts       node -> styled()/className snippet
     format.ts        rgba/clamp/token-ref formatting + name conversions
     serialize.ts     value tree -> pretty TS source

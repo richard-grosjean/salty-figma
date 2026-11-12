@@ -77,6 +77,19 @@ function cssFontStack(family: string): string {
   return `${name}, sans-serif`
 }
 
+/**
+ * Layer-1 font family keys: raw family -> main/secondary/…, ordered by text style
+ * usage. `extra` families (e.g. ones only held by Figma fontFamily variables) are
+ * appended after. These keys name the defineFont() CSS variables in fonts.css.ts
+ * (font-family-main, …), which the layer-2 fontFamily tokens in variables.css.ts
+ * point at ({fontFamily.main}).
+ */
+export function baseFamilyKeys(families: string[], extra: string[] = []): Map<string, string> {
+  const ordered = orderedFamilies(families)
+  for (const f of extra) if (f && !ordered.includes(f)) ordered.push(f)
+  return new Map(ordered.map((f, i) => [f, familyKey(i)]))
+}
+
 /** The fontFamily.* tokens (main/secondary/…) derived from a list of used families. */
 export function collectFontFamilies(families: string[]): FontFamilyToken[] {
   return orderedFamilies(families).map((family, i) => ({
@@ -166,8 +179,9 @@ function constName(family: string): string {
 
 /**
  * fonts.css.ts — one Salty defineFont() per family used by text styles, with a
- * variant per (weight, italic) combination in use. The CSS variable follows the
- * family's fontFamily token key: {fontFamily.heading} -> font-family-heading.
+ * variant per (weight, italic) combination in use. This is font family layer 1:
+ * the CSS variable uses the family's base key ({fontFamily.main} ->
+ * font-family-main), and semantic layer-2 tokens in variables.css.ts reference it.
  */
 export function generateFonts(snapshot: DesignSystemSnapshot): GenResult {
   const warnings: string[] = []
@@ -178,7 +192,7 @@ export function generateFonts(snapshot: DesignSystemSnapshot): GenResult {
     return { contents: '', warnings }
   }
 
-  const keys = familyKeyMap(familiesOf(snapshot), figmaFamilyKeys(snapshot.collections))
+  const keys = baseFamilyKeys(familiesOf(snapshot))
   const byFamily = new Map<string, FontFace[]>()
   for (const f of faces) {
     const list = byFamily.get(f.family) ?? []

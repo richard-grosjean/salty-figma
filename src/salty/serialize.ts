@@ -39,7 +39,12 @@ export function serialize(value: unknown, indent = 0): string {
       ([, v]) => v !== undefined,
     )
     if (entries.length === 0) return '{}'
-    const lines = entries.map(([k, v]) => `${padIn}${quoteKey(k)}: ${serialize(v, indent + 1)}`)
+    const lines = entries.map(([k, v]) =>
+      // `{ colors: colors }` -> `{ colors }` (shorthand for a same-named identifier).
+      isRaw(v) && v.__raw === k
+        ? `${padIn}${k}`
+        : `${padIn}${quoteKey(k)}: ${serialize(v, indent + 1)}`,
+    )
     return `{\n${lines.join(',\n')}\n${pad}}`
   }
 
