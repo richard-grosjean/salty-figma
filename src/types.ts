@@ -23,9 +23,11 @@ export type ReadValue =
   | { kind: 'string'; value: string }
   | { kind: 'boolean'; value: boolean }
   /** VARIABLE_ALIAS resolved to the dotted path of its target, e.g. "colors.green". */
-  | { kind: 'alias'; path: string }
+  | { kind: 'alias'; path: string; id?: string }
 
 export interface ReadVariable {
+  /** Figma variable id (used to resolve aliases / bound variables to final paths). */
+  id: string
   /** Raw Figma name, e.g. "colors/light1/100". */
   name: string
   /** Name split on "/", e.g. ["colors","light1","100"]. */
@@ -62,6 +64,10 @@ export interface ReadTextStyle {
   letterSpacing: string
   textTransform: string
   textDecoration: string
+  /** Dotted token path of the variable bound to the style's font size, e.g. "fontSizes.heading.xLarge". */
+  fontSizeRef?: string
+  /** Dotted token path of the variable bound to the style's font family, e.g. "fontFamily.heading". */
+  fontFamilyRef?: string
 }
 
 export interface DesignSystemSnapshot {

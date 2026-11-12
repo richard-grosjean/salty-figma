@@ -7,7 +7,7 @@
 // document's COLOR variables; numeric values fall back to HDClamp(px).
 
 import { hdClamp, num, rgbaToCss, tokenRef, Raw } from './format'
-import { familyKeyMap } from './fonts'
+import { familyKeyMap, figmaFamilyKeys } from './fonts'
 import { readCollections } from './read'
 import { serialize, Tree } from './serialize'
 
@@ -15,12 +15,16 @@ import { serialize, Tree } from './serialize'
 let colorIndex: Map<string, string> | null = null
 
 // fontFamily -> token key ("main"/"secondary"/…), so Dev Mode output references
-// {fontFamily.main} to match fonts.css / templates.css.ts.
+// {fontFamily.main} to match fonts.css / text-styles.ts.
 let fontFamilyIndex: Map<string, string> | null = null
 
 export async function buildFontFamilyIndex(): Promise<Map<string, string>> {
   const styles = await figma.getLocalTextStylesAsync()
-  return familyKeyMap(styles.map((s) => s.fontName.family))
+  const figmaKeys = figmaFamilyKeys(await readCollections())
+  return familyKeyMap(
+    styles.map((s) => s.fontName.family),
+    figmaKeys,
+  )
 }
 
 function resolveFontFamily(family: string): string {

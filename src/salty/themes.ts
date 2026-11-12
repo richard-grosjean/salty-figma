@@ -1,4 +1,4 @@
-// Generates themes.css.ts from the semantic THEME variable collection.
+// Generates themes.ts from the semantic THEME variable collection.
 // Each mode (Light / Dark / Grey / …) becomes an entry in `themes`, and the
 // whole thing is wired into Salty via defineVariables({ conditional: { theme } }).
 
@@ -118,7 +118,7 @@ export function generateThemes(snapshot: DesignSystemSnapshot): GenResult {
 
   if (!collection) {
     warnings.push(
-      'No theme collection detected (looked for a collection named theme/semantic or with Light/Dark modes). themes.css.ts skipped.',
+      'No theme collection detected (looked for a collection named theme/semantic or with Light/Dark modes). themes.ts skipped.',
     )
     return { contents: '', warnings }
   }

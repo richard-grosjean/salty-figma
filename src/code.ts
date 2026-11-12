@@ -35,9 +35,9 @@ if (figma.editorType === 'dev') {
       }
 
       if (msg.targets.includes('variables')) add('variables.css.ts', generateVariables(snapshot))
-      if (msg.targets.includes('themes')) add('themes.css.ts', generateThemes(snapshot))
-      if (msg.targets.includes('templates')) add('templates.css.ts', generateTemplates(snapshot))
-      if (msg.targets.includes('fonts')) add('fonts.css', generateFonts(snapshot))
+      if (msg.targets.includes('themes')) add('themes.ts', generateThemes(snapshot))
+      if (msg.targets.includes('templates')) add('text-styles.ts', generateTemplates(snapshot))
+      if (msg.targets.includes('fonts')) add('fonts.css.ts', generateFonts(snapshot))
 
       post({ type: 'exported', files, warnings })
     } catch (err) {

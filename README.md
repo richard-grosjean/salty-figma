@@ -15,14 +15,18 @@ Modelled on the conventions in `gigaton-website/apps/website/src/styles/`.
 | Target | Output file | Salty API |
 |--------|-------------|-----------|
 | Variables | `variables.css.ts` | `defineVariables({ colors, fontFamily, … , responsive: { base, '@largeMobileDown' } })` |
-| Themes | `themes.css.ts` | `defineVariables({ conditional: { theme } })` + a generated `Theme` interface |
-| Text styles | `templates.css.ts` | `defineTemplates({ textStyle })` |
-| Fonts | `fonts.css` | plain CSS `@font-face` rules |
+| Themes | `themes.ts` | `defineVariables({ conditional: { theme } })` + a generated `Theme` interface |
+| Text styles | `text-styles.ts` | `export const textStyles = { … } as const` (pass to `defineTemplates` yourself) |
+| Fonts | `fonts.css.ts` | `defineFont({ name, fallback, display, variable, variants })` per family |
 
 ### Mapping rules (v1)
 
 - **Colors** → grouped under a top-level `colors` namespace (see conversions below).
-- **Strings / booleans** → top-level groups at the variable's `/`-path.
+- **Other variables** → namespaced by their collection, so same-named variables in different
+  collections don't collide: `font families` / `heading` → `fontFamily.heading`, `font sizes` /
+  `heading/xl` → `fontSizes.heading.xLarge`. A variable whose first segment already names the
+  collection isn't double-prefixed. Size names inside `fontSizes` are expanded like text styles.
+- **Strings / booleans** → static values at that path.
 - **Numeric variables** in scaling groups → `responsive.base` as `HDClamp(desktop)`, and (when the
   collection has a mobile mode) `responsive['@largeMobileDown']` as `MobileClamp(mobile)`.
 - **`fontWeights` / `zIndex`** numbers → emitted raw (never clamped).
@@ -52,10 +56,11 @@ To keep the emitted tokens idiomatic, some Figma names are rewritten. The conver
 A trailing 2–3 digit shade (50–950) is split off; single digits (`light1`) and pure numbers are left
 alone. Already-`colors`-prefixed names aren't double-namespaced.
 
-**Font families** — the distinct families used by text styles become `fontFamily.main`,
-`fontFamily.secondary`, … (ordered by usage frequency). `templates.css.ts` and the Dev Mode snippet
-reference `{fontFamily.main}`, `variables.css.ts` defines the tokens, and `fonts.css` emits one
-`@font-face` per distinct `(family, weight, italic)` used, as `/fonts/<Family>-<Style>.woff2`.
+**Font families** — families defined as `fontFamily.*` variables in Figma keep that key. Any other
+family used by text styles becomes `fontFamily.main`, `fontFamily.secondary`, … (ordered by usage
+frequency). `text-styles.ts` and the Dev Mode snippet reference these tokens, `variables.css.ts`
+defines them, and `fonts.css.ts` emits one `defineFont()` per family, with a variant per
+`(weight, italic)` used (`src: '/fonts/<Family>-<Style>.woff2'`) and `variable: 'font-family-<key>'`.
 
 **Text styles** — segment names are canonicalised:
 
@@ -67,8 +72,23 @@ reference `{fontFamily.main}`, `variables.css.ts` defines the tokens, and `fonts
 | `headline` | `heading` |
 | `r` | `regular` |
 
-Desktop/mobile variants of the same style are merged into one entry, with the size expressed as
-`HDClamp(desktopPx, mobilePx)` — e.g. `Headline/XXXL/desktop` + `Headline/XXXL/mobile` →
+Each category gets a `base` with the values its sizes share (font family, weight, line-height,
+letter-spacing, text transform; the most common value wins). Each size keeps its `fontSize` plus only
+the values that differ from the base:
+
+```ts
+heading: {
+  base: { fontFamily: '{fontFamily.heading}', fontWeight: 300, lineHeight: '98%', letterSpacing: '-0.05em' },
+  xLarge: { fontSize: '{fontSizes.heading.xLarge}', lineHeight: '96%' },
+  medium: { fontSize: '{fontSizes.heading.medium}' },
+},
+```
+
+`fontSize` and `fontFamily` reference the variables bound to the text style in Figma. Styles that
+aren't inside a category (e.g. a top-level `Headline XL`) are skipped with a warning.
+
+Without a bound font size variable, desktop/mobile variants of the same style are merged into one
+entry, with the size expressed as `HDClamp(desktopPx, mobilePx)` — e.g. `Headline/XXXL/desktop` + `Headline/XXXL/mobile` →
 `heading.xxxLarge` with `fontSize: HDClamp(80, 40)`. Line-height / letter-spacing are relative
 (`%` / `em`) and viewport-independent, so the desktop values carry over.
 
@@ -111,9 +131,9 @@ src/
     read.ts          reads Figma variables + text styles -> plain snapshot
     config.ts        mapping heuristics (collection/mode classification)
     variables.ts     -> variables.css.ts (colors, fontFamily tokens, responsive)
-    themes.ts        -> themes.css.ts (+ Theme interface)
-    templates.ts     -> templates.css.ts (desktop/mobile merge)
-    fonts.ts         -> fonts.css (@font-face) + fontFamily token derivation
+    themes.ts        -> themes.ts output (+ Theme interface)
+    templates.ts     -> text-styles.ts (category base + per-size overrides)
+    fonts.ts         -> fonts.css.ts (defineFont) + fontFamily token derivation
     codegen.ts       node -> styled()/className snippet
     format.ts        rgba/clamp/token-ref formatting + name conversions
     serialize.ts     value tree -> pretty TS source

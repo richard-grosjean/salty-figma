@@ -8,7 +8,7 @@
 
 import type { DesignSystemSnapshot, ReadCollection, ReadValue, ReadVariable } from '../types'
 import { classifyModes, findThemeCollection, isNonClampGroup } from './config'
-import { collectFontFamilies, familiesOf } from './fonts'
+import { collectFontFamilies, familiesOf, figmaFamilyKeys } from './fonts'
 import { hdClamp, isRaw, mobileClamp, Raw, tokenRef } from './format'
 import { serialize, setPath, Tree } from './serialize'
 
@@ -92,9 +92,10 @@ export function generateVariables(snapshot: DesignSystemSnapshot): GenResult {
   }
 
   // Font families used by text styles become fontFamily.main / .secondary / …
-  // tokens so templates.css.ts can reference {fontFamily.main}. Existing
-  // (Figma-sourced) fontFamily keys are preserved.
-  const fontFamilies = collectFontFamilies(familiesOf(snapshot))
+  // tokens so text-styles.ts can reference {fontFamily.main}. Families that
+  // already have a Figma fontFamily.* variable are skipped (that key is used).
+  const inFigma = figmaFamilyKeys(snapshot.collections)
+  const fontFamilies = collectFontFamilies(familiesOf(snapshot)).filter((f) => !inFigma.has(f.family))
   if (fontFamilies.length) {
     const existing =
       top.fontFamily && typeof top.fontFamily === 'object' && !isRaw(top.fontFamily)
@@ -116,7 +117,7 @@ export function generateVariables(snapshot: DesignSystemSnapshot): GenResult {
 
   const lines: string[] = [`import { defineVariables } from '@salty-css/core/config';`]
   if (helperImports.length) {
-    lines.push(`import { ${helperImports.join(', ')} } from './helpers.css';`)
+    lines.push(`import { ${helperImports.join(', ')} } from './helpers';`)
   }
   lines.push('')
   lines.push(`export default defineVariables(${serialize(root)});`)

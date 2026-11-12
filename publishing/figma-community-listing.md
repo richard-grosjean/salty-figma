@@ -35,9 +35,9 @@ Inspect panel — colors resolved to {colors.…} refs, font families to
 
 What you get:
 • variables.css.ts — colors, fonts and responsive tokens via defineVariables()
-• themes.css.ts — light/dark (and beyond) via a conditional theme + a typed Theme interface
-• templates.css.ts — text styles via defineTemplates(), with desktop/mobile merged into fluid clamps
-• fonts.css — one @font-face per family / weight / style in use
+• themes.ts — light/dark (and beyond) via a conditional theme + a typed Theme interface
+• text-styles.ts — a textStyles object ready for defineTemplates(), grouped per category with a shared base and font size tokens
+• fonts.css.ts — one defineFont() per family, with a variant per weight / style in use
 
 Names are tidied up automatically: color shades fold into nested keys
 (offBlack900 → colors.offBlack.900), t-shirt sizes expand (xl → xLarge), and

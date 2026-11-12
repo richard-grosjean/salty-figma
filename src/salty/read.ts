@@ -12,12 +12,12 @@ import type {
 } from '../types'
 import { findThemeCollection } from './config'
 import {
-  dottedName,
   expandSizeSegment,
   num,
   renameSegment,
   rgbaToCss,
   leafPaths,
+  namespacePath,
   splitName,
 } from './format'
 
@@ -94,9 +94,17 @@ function colorValue(c: RGBA): ReadValue {
   return { kind: 'color', hex: rgbaToCss(c.r, c.g, c.b, c.a), r: c.r, g: c.g, b: c.b, a: c.a }
 }
 
-async function aliasPath(alias: VariableAlias, cache: VarCache): Promise<string> {
-  const target = await getVar(alias.id, cache)
-  return target ? dottedName(target.name, target.resolvedType === 'COLOR') : alias.id
+/**
+ * Dotted token path of a variable by id, namespaced by its collection. Used for
+ * aliases and bound variables; readCollections later overrides it with the
+ * exact path (incl. leaf fixes) for variables that live in this document.
+ */
+async function variablePath(id: string, cache: VarCache): Promise<string> {
+  const target = await getVar(id, cache)
+  if (!target) return id
+  const isColor = target.resolvedType === 'COLOR'
+  const col = await figma.variables.getVariableCollectionByIdAsync(target.variableCollectionId)
+  return namespacePath(splitName(target.name, isColor), col?.name ?? '', isColor).join('.')
 }
 
 async function readValue(value: VariableValue, cache: VarCache): Promise<ReadValue> {
@@ -105,7 +113,7 @@ async function readValue(value: VariableValue, cache: VarCache): Promise<ReadVal
   if (typeof value === 'string') return { kind: 'string', value }
 
   // Alias -> resolve to the target variable's dotted path.
-  if (isAlias(value)) return { kind: 'alias', path: await aliasPath(value, cache) }
+  if (isAlias(value)) return { kind: 'alias', path: await variablePath(value.id, cache), id: value.id }
 
   // Color @ opacity -> plain rgba() of the resolved color.
   if (composedParts(value)) {
@@ -131,6 +139,7 @@ async function readCollection(collection: VariableCollection): Promise<ReadColle
       valuesByMode[modeId] = await readValue(v.valuesByMode[modeId], cache)
     }
     variables.push({
+      id: v.id,
       name: v.name,
       path: splitName(v.name, v.resolvedType === 'COLOR'),
       resolvedType: v.resolvedType as ResolvedType,
@@ -205,9 +214,18 @@ function textStylePath(name: string): string[] {
   return splitName(name).map((s) => expandSizeSegment(renameSegment(s)))
 }
 
-async function readTextStyle(style: TextStyle): Promise<ReadTextStyle> {
+async function readTextStyle(
+  style: TextStyle,
+  paths: Map<string, string>,
+  cache: VarCache,
+): Promise<ReadTextStyle> {
   const fontWeight = weightFromStyle(style.fontName.style)
+  const bound = style.boundVariables ?? {}
+  const ref = async (alias: VariableAlias | undefined) =>
+    alias ? (paths.get(alias.id) ?? (await variablePath(alias.id, cache))) : undefined
   return {
+    fontSizeRef: await ref(bound.fontSize),
+    fontFamilyRef: await ref(bound.fontFamily),
     name: style.name,
     path: textStylePath(style.name),
     fontFamily: style.fontName.family,
@@ -243,27 +261,49 @@ export async function readCollections(): Promise<ReadCollection[]> {
   const read: ReadCollection[] = []
   for (const c of collections) read.push(await readCollection(c))
 
+  // Non-theme variables live under their collection's namespace (fontFamily.*,
+  // fontSizes.*, …) so same-named variables in different collections don't
+  // collide. Theme variables keep their plain semantic names.
   const theme = findThemeCollection(read)
-  const palette = read.filter((c) => c !== theme).flatMap((c) => c.variables)
+  const nonTheme = read.filter((c) => c !== theme)
+  for (const c of nonTheme) {
+    for (const v of c.variables) v.path = namespacePath(v.path, c.name, v.resolvedType === 'COLOR')
+  }
+
+  const palette = nonTheme.flatMap((c) => c.variables)
   const fix = leafPaths(palette.map((v) => v.path))
   for (const v of palette) v.path = fix(v.path)
+
+  // Point every alias at its target's final path.
+  const paths = variablePaths(read)
   for (const c of read) {
     for (const v of c.variables) {
       for (const val of Object.values(v.valuesByMode)) {
-        if (val.kind === 'alias') val.path = fix(val.path.split('.')).join('.')
+        if (val.kind !== 'alias') continue
+        val.path = (val.id && paths.get(val.id)) || fix(val.path.split('.')).join('.')
       }
     }
   }
   return read
 }
 
+/** variable id -> final dotted token path, for every variable in the document. */
+function variablePaths(collections: ReadCollection[]): Map<string, string> {
+  const paths = new Map<string, string>()
+  for (const c of collections) for (const v of c.variables) paths.set(v.id, v.path.join('.'))
+  return paths
+}
+
 export async function readDesignSystem(): Promise<DesignSystemSnapshot> {
   const collections = await readCollections()
+
+  const paths = variablePaths(collections)
+  const cache: VarCache = new Map()
 
   const styles = await figma.getLocalTextStylesAsync()
   const textStyles: ReadTextStyle[] = []
   for (const s of styles) {
-    textStyles.push(await readTextStyle(s))
+    textStyles.push(await readTextStyle(s, paths, cache))
   }
 
   return { collections, textStyles }

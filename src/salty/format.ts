@@ -218,3 +218,46 @@ export function leafPaths(paths: string[][]): (path: string[]) => string[] {
 export function dottedName(name: string, isColor = false): string {
   return splitName(name, isColor).join('.')
 }
+
+// Collection names that map onto a canonical Salty token namespace.
+const COLLECTION_NAMESPACES: Record<string, string> = {
+  fontfamily: 'fontFamily',
+  fontfamilies: 'fontFamily',
+  fonts: 'fontFamily',
+  fontsize: 'fontSizes',
+  fontsizes: 'fontSizes',
+  fontweight: 'fontWeights',
+  fontweights: 'fontWeights',
+}
+
+/** Token namespace for a collection: "font families" -> "fontFamily", "radii" -> "radii". */
+export function collectionNamespace(collectionName: string): string {
+  const key = camelCase(collectionName)
+  return COLLECTION_NAMESPACES[key.toLowerCase()] ?? key
+}
+
+/** Singular, lower-case stem used to compare group names ("fontFamilies" ~ "fontFamily"). */
+function stem(s: string): string {
+  return s.toLowerCase().replace(/ies$/, 'y').replace(/s$/, '')
+}
+
+/**
+ * Place a non-color variable under its collection's namespace, so variables
+ * with the same name in different collections don't collide:
+ *   "font families" / "heading"     -> ["fontFamily", "heading"]
+ *   "font sizes"    / "heading/xl"  -> ["fontSizes", "heading", "xLarge"]
+ *   "radii"         / "radii/s"     -> ["radii", "s"]   (already namespaced)
+ * Colors are returned unchanged — they're always grouped under `colors`.
+ * Inside `fontSizes`, size abbreviations are expanded (xl -> xLarge, r ->
+ * regular) to match the text style names that reference them.
+ */
+export function namespacePath(path: string[], collectionName: string, isColor: boolean): string[] {
+  if (isColor || path.length === 0) return path
+  const ns = collectionNamespace(collectionName)
+  if (!ns) return path
+  const out = stem(path[0]) === stem(ns) ? path : [ns, ...path]
+  if (stem(out[0]) === stem('fontSizes')) {
+    return [out[0], ...out.slice(1).map((s) => expandSizeSegment(renameSegment(s)))]
+  }
+  return out
+}

@@ -1,6 +1,17 @@
-// Generates templates.css.ts from Figma text styles, as Salty defineTemplates
-// under a `textStyle` template group. Font sizes are wrapped in HDClamp(px);
-// line-height / letter-spacing keep their CSS unit strings.
+// Generates text-styles.ts from Figma text styles: a plain `textStyles` object
+// (register it with defineTemplates({ textStyle: textStyles }) in your project).
+//
+// Each category (heading, body, button, …) gets a `base` holding the values its
+// sizes share — font family, weight, line-height, letter-spacing, … (the most
+// common value wins). Each size then holds its fontSize plus only the values
+// that differ from the base:
+//   heading: { base: { fontFamily: '{fontFamily.heading}', … },
+//              large: { fontSize: '{fontSizes.heading.large}' }, … }
+//
+// Font size / family reference the Figma variables bound to the text style
+// ({fontSizes.…} / {fontFamily.…}); unbound sizes fall back to HDClamp(px) and
+// unbound families to a derived {fontFamily.main}-style token. Top-level styles
+// that aren't inside a category (e.g. "Headline XL") are skipped.
 //
 // Desktop/mobile variants of the same style (e.g. "xxxl/desktop" + "xxxl/mobile")
 // are merged into a single "xxxl". Salty templates don't support media queries,
@@ -9,7 +20,7 @@
 // viewport-independent; the desktop values are kept.
 
 import type { DesignSystemSnapshot, ReadTextStyle } from '../types'
-import { familiesOf, familyKeyMap } from './fonts'
+import { familiesOf, familyKeyMap, figmaFamilyKeys } from './fonts'
 import { hdClamp, isRaw, tokenRef, weightFromSegment } from './format'
 import { serialize, setPath, Tree } from './serialize'
 import type { GenResult } from './variables'
@@ -89,6 +100,7 @@ function splitViewport(path: string[]): { key: string[]; viewport: Viewport | nu
 }
 
 function familyRef(s: ReadTextStyle, familyKeys: Map<string, string>): string {
+  if (s.fontFamilyRef) return tokenRef(s.fontFamilyRef)
   const key = familyKeys.get(s.fontFamily)
   // Reference the fontFamily.* token (defined in variables.css.ts); fall back to
   // the raw family if the font has no text style / token.
@@ -96,9 +108,11 @@ function familyRef(s: ReadTextStyle, familyKeys: Map<string, string>): string {
 }
 
 /**
- * Style object for a template. Font size is HDClamp(desktop); when a mobile
- * variant exists it becomes HDClamp(desktop, mobile) so the size scales down
- * without a media query.
+ * Full style object for one size. Font size is the bound {fontSizes.…} variable
+ * (responsive via its desktop/mobile modes); without one it's HDClamp(desktop),
+ * or HDClamp(desktop, mobile) when a mobile text style variant exists.
+ * textTransform / textDecoration are always present here (incl. 'none') so the
+ * base extraction can compare them; 'none' is dropped again afterwards.
  */
 function styleObject(
   s: ReadTextStyle,
@@ -106,15 +120,95 @@ function styleObject(
   mobile?: ReadTextStyle,
 ): Tree {
   const obj: Tree = {
+    fontSize: s.fontSizeRef
+      ? tokenRef(s.fontSizeRef)
+      : mobile
+        ? hdClamp(s.fontSize, mobile.fontSize)
+        : hdClamp(s.fontSize),
     fontFamily: familyRef(s, familyKeys),
-    fontSize: mobile ? hdClamp(s.fontSize, mobile.fontSize) : hdClamp(s.fontSize),
-    lineHeight: s.lineHeight,
-    letterSpacing: s.letterSpacing,
   }
   if (s.fontWeight !== null) obj.fontWeight = s.fontWeight
-  if (s.textTransform !== 'none') obj.textTransform = s.textTransform
-  if (s.textDecoration !== 'none') obj.textDecoration = s.textDecoration
+  obj.lineHeight = s.lineHeight
+  obj.letterSpacing = s.letterSpacing
+  obj.textTransform = s.textTransform
+  obj.textDecoration = s.textDecoration
   return obj
+}
+
+/** Properties moved into a category's `base`, in output order. */
+const BASE_PROPS = [
+  'fontFamily',
+  'fontWeight',
+  'lineHeight',
+  'letterSpacing',
+  'textTransform',
+  'textDecoration',
+]
+
+/** CSS initial values: a base/size never needs to state these. */
+const INITIAL: Record<string, string> = { textTransform: 'none', textDecoration: 'none' }
+
+const ABSENT = '\u0000absent'
+
+function valueKey(v: unknown): string {
+  return v === undefined ? ABSENT : JSON.stringify(v)
+}
+
+/** Most common value of `prop` across the leaves (ties: first seen). */
+function commonValue(leaves: Tree[], prop: string): unknown {
+  const counts = new Map<string, { value: unknown; n: number }>()
+  for (const l of leaves) {
+    const k = valueKey(l[prop])
+    const c = counts.get(k)
+    if (c) c.n++
+    else counts.set(k, { value: l[prop], n: 1 })
+  }
+  let best: { value: unknown; n: number } | undefined
+  for (const c of counts.values()) if (!best || c.n > best.n) best = c
+  return best?.value
+}
+
+/**
+ * Split each group of sizes into a shared `base` + per-size overrides. Applied
+ * to every node below the root that directly holds size leaves.
+ */
+function extractBases(node: Tree, isRoot: boolean, warnings: string[], path: string[]): Tree {
+  const out: Tree = {}
+  const keys = Object.keys(node)
+  const leafKeys = keys.filter((k) => isLeafStyle(node[k]))
+  const leaves = leafKeys.map((k) => node[k] as Tree)
+
+  let base: Tree | null = null
+  if (!isRoot && leaves.length) {
+    if ('base' in node) {
+      warnings.push(`"${path.join('/')}" has a style named "base"; shared values not extracted.`)
+    } else {
+      base = {}
+      for (const prop of BASE_PROPS) {
+        const v = commonValue(leaves, prop)
+        if (v !== undefined && v !== INITIAL[prop]) base[prop] = v
+      }
+      out.base = base
+    }
+  }
+
+  for (const k of keys) {
+    const child = node[k]
+    if (!isPlainObject(child)) continue
+    if (!isLeafStyle(child)) {
+      out[k] = extractBases(child, false, warnings, [...path, k])
+      continue
+    }
+    const size: Tree = { fontSize: child.fontSize }
+    for (const prop of BASE_PROPS) {
+      const v = child[prop]
+      if (v === undefined) continue
+      const inherited = base ? (base[prop] ?? INITIAL[prop]) : INITIAL[prop]
+      if (valueKey(v) !== valueKey(inherited)) size[prop] = v
+    }
+    out[k] = size
+  }
+  return out
 }
 
 interface StyleGroup {
@@ -128,11 +222,11 @@ export function generateTemplates(snapshot: DesignSystemSnapshot): GenResult {
   const warnings: string[] = []
 
   if (snapshot.textStyles.length === 0) {
-    warnings.push('No local text styles found — templates.css.ts skipped.')
+    warnings.push('No local text styles found — text-styles.ts skipped.')
     return { contents: '', warnings }
   }
 
-  const familyKeys = familyKeyMap(familiesOf(snapshot))
+  const familyKeys = familyKeyMap(familiesOf(snapshot), figmaFamilyKeys(snapshot.collections))
 
   // Group desktop/mobile variants under a shared (viewport-stripped) key.
   const groups = new Map<string, StyleGroup>()
@@ -152,32 +246,38 @@ export function generateTemplates(snapshot: DesignSystemSnapshot): GenResult {
     else g.plain = s
   }
 
-  const textStyles: Tree = {}
+  const loose: string[] = []
+  const grouped: Tree = {}
   for (const id of order) {
     const g = groups.get(id)!
     const base = g.desktop ?? g.plain ?? g.mobile
     if (!base) continue
+    // Only styles inside a category (heading/large, …) are exported.
+    if (g.key.length < 2) {
+      loose.push(base.name)
+      continue
+    }
 
     const mobile = g.mobile && g.mobile !== base ? g.mobile : undefined
     const obj = styleObject(base, familyKeys, mobile)
-    setPath(textStyles, g.key.length ? g.key : [base.name], obj)
+    setPath(grouped, g.key, obj)
+  }
+  if (loose.length) {
+    warnings.push(
+      `Skipped ${loose.length} text style(s) not inside a category: ${loose.join(', ')}.`,
+    )
   }
 
   // Collapse the weight level so styles nest only down to the size level.
   // Children of the root are categories (level 1).
-  collapseWeights(textStyles, 1)
+  collapseWeights(grouped, 1)
+
+  const textStyles = extractBases(grouped, true, warnings, [])
+  const body = serialize(textStyles)
 
   const lines: string[] = [
-    `import { defineTemplates } from '@salty-css/core/factories';`,
-    `import { HDClamp } from './helpers.css';`,
-    '',
-    `export const textStyles = ${serialize(textStyles)} as const;`,
-    '',
-    `export default defineTemplates({`,
-    `  textStyle: {`,
-    `    ...textStyles,`,
-    `  },`,
-    `});`,
+    ...(body.includes('HDClamp(') ? [`import { HDClamp } from './helpers';`, ''] : []),
+    `export const textStyles = ${body} as const;`,
     '',
   ]
 
